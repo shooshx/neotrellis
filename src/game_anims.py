@@ -1,12 +1,44 @@
 import util
 import math
 import colorsys
+import random
 
 def hsv_to_rgb(h, s, v):
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
     return int(r * 255), int(g * 255), int(b * 255)
 
-class Circle:
+def triangle_wave(x: float, period: float = 2*math.pi) -> float:
+    t = (x % period) / period
+    if t < 0.25:
+        return 4 * t
+    elif t < 0.75:
+        return 2 - 4 * t
+    else:
+        return -4 + 4 * t
+    
+def sawtooth_wave(x: float, period: float = 2*math.pi) -> float:
+    return (x % period) / period
+
+class AnimObj:
+    def depressed():
+        pass
+
+def ramp_with_edges(delta: float, start: float, end: float, v: float) -> float:
+    if v <= start or v >= end:
+        return 0.0
+    elif start + delta <= v <= end - delta:
+        return 1.0
+    elif v < start + delta:
+        # Rising edge: linear from 0 → 1
+        return (v - start) / delta
+    else:  # v > end - delta
+        # Falling edge: linear from 1 → 0
+        return (end - v) / delta    
+    
+def clamp(mn, v, mx):
+    return max(mn, min(v, mx))
+
+class Circle(AnimObj):
     def __init__(self, x, y, max_radius=10, speed=0.2):
         self.x = x
         self.y = y
@@ -14,35 +46,39 @@ class Circle:
         self.max_radius = max_radius
         self.speed = speed
         self.EDGE = 3.0
-        self.radius = -self.EDGE
+        self.outer_radius = 0
+        self.is_pressed = True
+        self.inner_radius = -self.EDGE*2
+        self.start_v = random.random()*6
 
     def update(self):
-        self.radius += self.speed
-        #self.hue += 0.1
+        self.outer_radius += self.speed
+        self.inner_radius += self.speed
+        if self.is_pressed:
+            self.inner_radius = min(self.inner_radius, -self.EDGE)
+
 
     def is_alive(self):
-        return self.radius < self.max_radius
+        return self.inner_radius <= 10
+    
+    def depressed(self):
+        self.is_pressed = False
 
     def draw(self, d):
         for yy in range(d.HEIGHT):
             for xx in range(d.WIDTH):
                 dist = math.sqrt((xx - self.x)**2 + (yy - self.y)**2)
-                delta = abs(dist - self.radius)
 
-                if delta < self.EDGE:  # soft edge ~2 pixels
-                    # brightness factor: 1 at center of ring, 0 at edge
-                    brightness = max(0.0, 1.0 - delta / self.EDGE)
+                f = ramp_with_edges(self.EDGE, self.inner_radius, self.outer_radius, dist)
+                if f == 0.0:
+                    continue
 
-                    # fade out as radius increases
-                    fade = 1.0 - self.radius / self.max_radius
-                    brightness *= fade
-                    hue = (dist / 8)
-                    color = hsv_to_rgb(hue, 1, 1)
-                    d.add(xx, yy, (int(color[0] * brightness), int(color[1] * brightness), int(color[2] * brightness)))
+                hue = sawtooth_wave((-dist + self.outer_radius + self.start_v)*0.8)
+                #if xx == 0 and yy == 0:
+                #    print(self.start_v, hue)
+                color = hsv_to_rgb(hue, 1, 1) #(hue*255, 0, 0)
+                d.add(xx, yy, (int(color[0] * f), int(color[1] * f), int(color[2] * f)))
 
-                # Thin outline
-                #if abs(dist - self.radius) < 0.5:
-                #    eng.color(xx, yy, color)
 
 
 class Circles_Handler(util.HandlerBase):
@@ -50,23 +86,34 @@ class Circles_Handler(util.HandlerBase):
         super().__init__()
         self.d = util.MatCol(width, height)
         
-        self.circles = []  # list of active animations
+        self.objmat = util.Mat(width, height, None)
+        self.objects = [] 
 
     def on_key_down(self, x, y):
-        # Start a new circle centered on key (x, y)
-        self.circles.append(Circle(x, y))
+        obj = Circle(x, y)
+        self.objmat.set(x, y, obj)
+        self.objects.append(obj)
 
+    def on_key_up(self, x, y):
+        obj = self.objmat.get(x, y)
+        if obj is not None:
+            obj.depressed()
+            
     def on_tick(self):
         self.d.fill_elem([0,0,0])
 
-        new_circles = []
-        for circle in self.circles:
+        new_objects = []
+        for circle in self.objects:
             circle.draw(self.d)
             circle.update()
             if circle.is_alive():
-                new_circles.append(circle)
+                new_objects.append(circle)
+            else:
+                pass
+                #print("Removed")
 
-        self.circles = new_circles
+
+        self.objects = new_objects
         self.eng.fill_from(self.d)
         self.eng.show()   
 

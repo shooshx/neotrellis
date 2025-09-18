@@ -9,10 +9,10 @@ BLUE = (0, 0, 255)
 PURPLE = (255, 0, 255)
 
 class Mat:
-    def __init__(self, w, h, def_val):
+    def __init__(self, w, h, def_val, no_val=False):
         self.HEIGHT = w
         self.WIDTH = h
-        if def_val is not None:
+        if not no_val:
             self.d = [[ def_val for _ in range(w)] for _ in range(h)]
     
     def get(self, x, y):
@@ -22,7 +22,7 @@ class Mat:
         self.d[y][x] = v
     
     def copy(self):
-        new_mat = Mat(self.WIDTH, self.HEIGHT, None)  # temporary def_val, will be replaced
+        new_mat = Mat(self.WIDTH, self.HEIGHT, None, no_val=True)  # temporary def_val, will be replaced
         new_mat.d = [row[:] for row in self.d]
         return new_mat
     
